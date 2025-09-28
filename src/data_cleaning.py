@@ -1,12 +1,15 @@
 import pandas as pd
+import pymysql
+from sqlalchemy import create_engine
+
 df = pd.read_csv('./Dataset/raw/Luxury_Housing_Bangalore.csv')
 print(df)
 
-# print("***********************************************************************")
-# print(df.isnull().sum())
+print("***********************************************************************")
+print(df.isnull().sum())
 
-# print("************************************************************************")
-# print(df.describe())
+print("************************************************************************")
+print(df.describe())
 
 cleaned_df = df.copy()
 print(list(cleaned_df.columns))
@@ -14,9 +17,7 @@ print(list(cleaned_df.columns))
 #******************************Start Cleaning**********************************
 
 #Property_ID
-
 print("********checking column : Property_ID*********")
-
 print("Total Unique values in Property_ID :",cleaned_df["Property_ID"].count())
 print("Null value in Property_ID :",cleaned_df["Property_ID"].isna().sum())
 
@@ -27,14 +28,13 @@ print("Total Unique values in Micro_Market :",cleaned_df["Micro_Market"].count()
 print("Unique values in Micro_Market: ",cleaned_df["Micro_Market"].unique())
 print("Null value in Micro_Market :",cleaned_df["Micro_Market"].isna().sum())
 
-# Normalize Micro_Market names
+# Normalize the Micro_Market names
 cleaned_df["Micro_Market"] = (
     cleaned_df["Micro_Market"]
     .str.strip()             # remove leading/trailing spaces
     .str.title()             # convert to Title Case (Eg. 'Mg Road')
 )
 print(cleaned_df["Micro_Market"].unique())
-
 
 #Project_Name
 print("********checking column : Project_Name*********")
@@ -53,7 +53,7 @@ print("********checking column : Configuration	*********")
 print("Total Unique values in Configuration :",cleaned_df["Configuration"].count())
 print("Null value in Configuration :",cleaned_df["Configuration"].isna().sum())
 print("Unique values in Configuration : ",cleaned_df["Configuration"].unique())
-# Make everything uppercase and strip spaces
+# Make uppercase and strip spaces
 cleaned_df['Configuration'] = cleaned_df['Configuration'].str.upper().str.strip()
 # Standardize the "+" cases
 cleaned_df['Configuration'] = cleaned_df['Configuration'].str.replace("BHK+", "BHK+", regex=False)
@@ -66,24 +66,22 @@ print("Total Unique values in Unit_Size_Sqft :",cleaned_df["Unit_Size_Sqft"].cou
 print("Null value in Unit_Size_Sqft before:",cleaned_df["Unit_Size_Sqft"].isna().sum())
 print("Unique values in Unit_Size_Sqft : ",cleaned_df["Unit_Size_Sqft"].unique())
 
-# --- Unit_Size_Sqft Imputation ---
-# Step 1: Replace -1 with NaN
+# Replace -1 with NaN
 cleaned_df['Unit_Size_Sqft'] = cleaned_df['Unit_Size_Sqft'].replace(-1, pd.NA)
 
-# Step 2: Fill NaN using group mean (Micro_Market + Developer_Name + Configuration)
+# Fill NaN using group mean (Micro_Market + Developer_Name + Configuration)
 cleaned_df['Unit_Size_Sqft'] = cleaned_df.groupby(
     ['Micro_Market', 'Developer_Name', 'Configuration']
 )['Unit_Size_Sqft'].transform(lambda x: x.fillna(x.mean()))
-
-# ✅ Now all -1 values are replaced with the group average
 print("Remaining nulls:", cleaned_df['Unit_Size_Sqft'].isna().sum())
+
 #Ticket_Price_Cr
 print("******** checking column : Ticket_Price_Cr	*********")
 print("Total Unique values in Ticket_Price_Cr :",cleaned_df["Ticket_Price_Cr"].count())
 print("Null value in Ticket_Price_Cr :",cleaned_df["Ticket_Price_Cr"].isna().sum())
 cleaned_df['Ticket_Price_Cr'] = pd.to_numeric(cleaned_df['Ticket_Price_Cr'], errors='coerce')
 
-# --- Price_medians Imputation (Micro_Market + Configuration) ---
+# Price_medians (Micro_Market + Configuration)
 price_medians = cleaned_df.groupby(['Micro_Market', 'Configuration'])['Ticket_Price_Cr'].median()
 cleaned_df['Ticket_Price_Cr'] = cleaned_df.apply(
     lambda row: price_medians.get((row['Micro_Market'], row['Configuration']))
@@ -97,7 +95,7 @@ print("******** checking column : Amenity_Score	*********")
 print("Total Unique values in Amenity_Score :",cleaned_df["Amenity_Score"].count())
 print("Null value in Amenity_Score :",cleaned_df["Amenity_Score"].isna().sum())
 
-# --- Amenity_Score Imputation (Micro_Market + Developer_Name) ---
+# Amenity_Score Imputation (Micro_Market + Developer_Name) 
 if 'Developer_Name' in cleaned_df.columns:
     amenity_medians = cleaned_df.groupby(['Micro_Market', 'Developer_Name'])['Amenity_Score'].median()
     cleaned_df['Amenity_Score'] = cleaned_df.apply(
@@ -127,7 +125,6 @@ print("Null value in Purchase_Quarter :",cleaned_df["Purchase_Quarter"].isna().s
 print("Unique values in Purchase_Quarter : ",cleaned_df["Purchase_Quarter"].unique())
 cleaned_df["Purchase_Quarter"].info()
 cleaned_df['Purchase_Quarter'] = pd.to_datetime(cleaned_df['Purchase_Quarter'], errors='coerce')
-
 cleaned_df["Purchase_Quarter"].info()
 
 #Connectivity_Score
@@ -171,15 +168,15 @@ print("******** checking column : Buyer_Comments	*********")
 print("Total Unique values in Buyer_Comments :",cleaned_df["Buyer_Comments"].count())
 print("Null value in Buyer_Comments :",cleaned_df["Buyer_Comments"].isna().sum())
 print("Unique values in Buyer_Comments : ",cleaned_df["Buyer_Comments"].unique())
-# --- Buyer_Comments Imputation ---
+
+# Buyer_Comments Imputation 
 cleaned_df['Buyer_Comments'] = cleaned_df['Buyer_Comments'].fillna("No comment")
 print("Unique values in Buyer_Comments after : ",cleaned_df["Buyer_Comments"].unique())
 
 
-# --- Missing Value Check ---
+# Missing Value Check 
 missing_before = df.isna().sum()
 missing_after = cleaned_df.isna().sum()
-
 missing_summary = pd.DataFrame({
     "Missing Before": missing_before,
     "Missing After": missing_after
@@ -189,38 +186,33 @@ missing_summary = pd.DataFrame({
 #************************************Derived columns*************************************
 #Price_per_Sqft
 cleaned_df['Price_per_Sqft'] = ((cleaned_df['Ticket_Price_Cr'] * 1e7) / cleaned_df['Unit_Size_Sqft']).round(1)
-cleaned_df['Price_per_Sqft']
+print(cleaned_df['Price_per_Sqft'])
 
 #Purchase_Quarter
 cleaned_df["Purchase_Quarter"].head()
 cleaned_df['Purchase_Quarter'] = pd.to_datetime(cleaned_df['Purchase_Quarter'])
 cleaned_df['Quarter_Number'] = cleaned_df['Purchase_Quarter'].dt.quarter
 print(cleaned_df["Purchase_Quarter"])
-cleaned_df['Quarter_Number'] 
+print(cleaned_df['Quarter_Number'])
 
 #Booking_Flag
 cleaned_df['Booking_Flag'] = cleaned_df['Transaction_Type'].apply(
     lambda x: 1 if str(x).strip().lower() == "primary" else 0
 )
-
 print(cleaned_df[['Transaction_Type', 'Booking_Flag']].head(10))
 print(cleaned_df['Booking_Flag'].value_counts())
-
 print(cleaned_df)
-
-Cleaned_data = "./Dataset/cleaned/Luxury_Housing_Bangalore_Cleaned_data.csv"
-cleaned_df.to_csv(Cleaned_data, index=False)
-
-print(f"Cleaned CSV saved at: {Cleaned_data}")
 
 print(cleaned_df.info())
 
+#Save into csv
+Cleaned_data = "./Dataset/cleaned/Luxury_Housing_Bangalore_Cleaned_data.csv"
+cleaned_df.to_csv(Cleaned_data, index=False)
+print(f"Cleaned CSV saved at: {Cleaned_data}")
+
+
 #load into sql
-
-import pymysql
-from sqlalchemy import create_engine
-
-# Replace with your own credentials
+#Credential
 username = "root"
 password = "12345"
 host = "localhost"
@@ -236,12 +228,12 @@ connection = pymysql.connect(
 cursor = connection.cursor()
 print("MySQL Database connection successful")
 
-# Create database if it doesn't exist
+# Create database 
 cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database}")
 print(f"Database '{database}' is ready.")
 cursor.execute(f"USE {database}")
 
-#create table and insert data
+#create table 
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS luxury_housing_bangalore (
         Property_ID VARCHAR(50) PRIMARY KEY,
@@ -269,8 +261,8 @@ cursor.execute("""
 """)
 print("Table 'luxury_housing_bangalore' is ready.")
 
-
-
+#insert data
 engine = create_engine(f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}")
 cleaned_df.to_sql('luxury_housing_bangalore', con=engine, if_exists='replace', index=False)
+
 print("DataFrame inserted into MySQL table 'luxury_housing_bangalore' successfully")
